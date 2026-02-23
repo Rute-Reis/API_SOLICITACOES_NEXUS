@@ -1,0 +1,86 @@
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+
+# ---------- SAÍDA: USUÁRIO ----------
+class UsuarioRead(BaseModel):
+    matricula: str
+    nome: str
+    email: Optional[str] = None
+    acesso: Optional[str] = None
+    ativo: int
+
+    class Config:
+        orm_mode = True
+
+
+# ---------- ENTRADA: CRIAR SOLICITAÇÃO ----------
+class SolicitacaoCreate(BaseModel):
+    matricula: str
+    id_tipo_solicitacao: int
+    prioridade_usuario: int
+    descricao_solicitacao: str
+    area_solicitante: str  # obrigatório (vem do dropdown do front)
+
+
+# ---------- SAÍDA: SOLICITAÇÃO (USADA EM /solicitacoes/criar) ----------
+class SolicitacaoRead(BaseModel):
+    id_solicitacao: int
+    matricula: str
+    id_tipo_solicitacao: int
+    id_status: int
+
+    data_hora_abertura: datetime = datetime.now()
+    data_hora_baixa: Optional[datetime] = None
+
+    prioridade_usuario: int
+    prioridade_area: int
+
+    id_area: int                       # existe no banco
+    descricao_solicitacao: str
+    acompanhamento_area_solicitante: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+
+
+# ---------- SAÍDA: SOLICITAÇÃO + USUÁRIO (USADA EM /solicitacoes/buscar) ----------
+class SolicitacaoComUsuario(SolicitacaoRead):
+    usuario: Optional[UsuarioRead] = None
+
+
+# ---------- ENTRADA: BUSCAR POR PERÍODO (USADA EM /solicitacoes/buscar) ----------
+class BuscarPeriodo(BaseModel):
+    data_inicio: datetime
+    data_fim: datetime
+
+
+# ---------- SAÍDA: ÁREA (USADA EM /solicitacoes/areas) ----------
+class AreaRead(BaseModel):
+    id_area: int
+    nome_area: str
+
+    class Config:
+        orm_mode = True
+
+
+# ---------- SAÍDA: ARQUIVOS (USADA EM /solicitacoes/upload-arquivo e listar) ----------
+class ArquivoOut(BaseModel):
+    ID_ARQUIVO: int
+    ID_SOLICITACAO: Optional[int]
+    NOME_ORIGINAL: str
+    NOME_ARQUIVO: str
+    CAMINHO: str
+    CONTENT_TYPE: Optional[str] = None
+    TAMANHO_BYTES: Optional[int] = None
+    DATA_UPLOAD: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+# ---------- SAÍDA: LISTA DE ARQUIVOS POR SOLICITAÇÃO ----------
+class ArquivoList(BaseModel):
+    arquivos: list[ArquivoOut]
+
+
