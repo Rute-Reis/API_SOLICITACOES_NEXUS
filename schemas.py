@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+# from pydantic import Field
 from typing import Optional
 from datetime import datetime
 
@@ -6,9 +7,9 @@ from datetime import datetime
 class UsuarioRead(BaseModel):
     matricula: str
     nome: str
-    email: Optional[str] = None
-    acesso: Optional[str] = None
-    ativo: int
+    # email: Optional[str] = None
+    # acesso: Optional[str] = None
+    # ativo: int
 
     class Config:
         orm_mode = True
@@ -30,15 +31,20 @@ class SolicitacaoRead(BaseModel):
     id_tipo_solicitacao: int
     id_status: int
 
-    data_hora_abertura: datetime = datetime.now()
+    data_hora_abertura: datetime
     data_hora_baixa: Optional[datetime] = None
 
     prioridade_usuario: int
     prioridade_area: int
 
-    id_area: int                       # existe no banco
+    id_area: int
     descricao_solicitacao: str
     acompanhamento_area_solicitante: Optional[str] = None
+
+    # class SolicitacaoRead(BaseModel):
+    #     id_area: int
+    #     area_solicitante: Optional[str] = None
+    #     descricao_solicitacao: str
 
     class Config:
         orm_mode = True
@@ -54,12 +60,24 @@ class SolicitacaoComUsuario(SolicitacaoRead):
 class BuscarPeriodo(BaseModel):
     data_inicio: datetime
     data_fim: datetime
+    prioridade_usuario: Optional[int] = None
+    prioridade_area: Optional[int] = None
+
 
 
 # ---------- SAÍDA: ÁREA (USADA EM /solicitacoes/areas) ----------
 class AreaRead(BaseModel):
     id_area: int
     nome_area: str
+
+    class Config:
+        orm_mode = True
+
+
+# ---------- SAÍDA: PRIORIDADE (usada em /solicitacoes/prioridades) ----------
+class PrioridadeRead(BaseModel):
+    id_prioridade: int
+    descricao: str
 
     class Config:
         orm_mode = True
@@ -82,5 +100,6 @@ class ArquivoOut(BaseModel):
 # ---------- SAÍDA: LISTA DE ARQUIVOS POR SOLICITAÇÃO ----------
 class ArquivoList(BaseModel):
     arquivos: list[ArquivoOut]
+
 
 
