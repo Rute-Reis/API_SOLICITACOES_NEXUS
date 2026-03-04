@@ -23,6 +23,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 from datetime import datetime
 
+print(models.Usuario.__table__)
+
 load_dotenv()
 
 router = APIRouter()
@@ -61,7 +63,20 @@ async def criar_solicitacao(
             detail="Área solicitante inválida.",
         )
 
-    # ajustado para receber o data_hora_abertura do schema, mas se não for enviado, usa o datetime.now() como default
+    # 2) Validar prioridade do usuário (usando TBL_PRIORIDADES)
+    prioridade_valida = (
+        db.query(models.Prioridade)
+        .filter(models.Prioridade.id_prioridade == dados.prioridade_usuario)
+        .first()
+    )
+
+    if not prioridade_valida:
+        raise HTTPException(
+            status_code=400,
+            detail="Prioridade do usuário inválida."
+        )
+
+    # 3) Criar solicitação (AGORA SIM UMA VEZ SÓ)
     nova = models.Solicitacao(
         matricula=dados.matricula,
         id_tipo_solicitacao=dados.id_tipo_solicitacao,
@@ -69,8 +84,8 @@ async def criar_solicitacao(
         descricao_solicitacao=dados.descricao_solicitacao,
         id_status=0,
         id_area=area_valida.id_area,
-        data_hora_abertura=datetime.now(),   # <- ESTA LINHA RESOLVE O ERRO
-        data_hora_baixa=None, # opcional, só preenche quando finalizar a solicitação
+        data_hora_abertura=datetime.now(),
+        data_hora_baixa=None,
     )
 
     db.add(nova)
@@ -78,6 +93,7 @@ async def criar_solicitacao(
     db.refresh(nova)
 
     return nova
+
 
 
 # ---------- POST /PAGINA_SOLICITACAO_NEXUS/buscar ----------
@@ -89,10 +105,11 @@ async def buscar_solicitacoes(
     db: Session = Depends(get_db),
 ):
     """
-    Busca solicitações por período (DATA_HORA_ABERTURA) e faz JOIN com TBL_USUARIOS
+    Busca solicitações por período (DATA_HORA_ABERTURA) e faz JOIN com TBL_USUARIOS (NOC)
     usando a coluna MATRICULA.
     """
 
+    # 1) Monta a query com JOIN em Usuário (LEFT JOIN)
     query = (
         db.query(models.Solicitacao, models.Usuario)
         .join(
@@ -106,6 +123,7 @@ async def buscar_solicitacoes(
         )
     )
 
+    # 2) Executa a query
     rows = query.all()
 
     if not rows:
@@ -116,7 +134,16 @@ async def buscar_solicitacoes(
 
     resultado: List[schemas.SolicitacaoComUsuario] = []
 
+    # 3) Monta a resposta no formato do schema Pydantic
     for solic, user in rows:
+
+        # (opcional, mas recomendado) – garante que ID_AREA nunca esteja nulo
+        if solic.id_area is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Registro ID_SOLICITACAO={solic.id_solicitacao} está sem ID_AREA definido no banco."
+            )
+
         item = schemas.SolicitacaoComUsuario(
             id_solicitacao=solic.id_solicitacao,
             matricula=solic.matricula,
@@ -126,19 +153,17 @@ async def buscar_solicitacoes(
             data_hora_baixa=solic.data_hora_baixa,
             prioridade_usuario=solic.prioridade_usuario,
             prioridade_area=solic.prioridade_area,
-            area_solicitante=getattr(solic, "area_solicitante", None),
+            id_area=solic.id_area,  # ← AGORA ESTÁ SENDO PREENCHIDO
             descricao_solicitacao=solic.descricao_solicitacao,
             acompanhamento_area_solicitante=solic.acompanhamento_area_solicitante,
             usuario=schemas.UsuarioRead(
                 matricula=user.matricula,
                 nome=user.nome,
-                email=user.email,
-                acesso=user.acesso,
-                ativo=user.ativo,
             )
             if user
             else None,
         )
+
         resultado.append(item)
 
     return resultado
@@ -153,6 +178,18 @@ async def listar_areas(db: Session = Depends(get_db)):
     """
     areas = db.query(models.AreaSolicitante).all()
     return areas
+
+
+# ---------- GET /PAGINA_SOLICITACAO_NEXUS/prioridades ----------
+@router.get(f"/{file}/prioridades", response_model=List[schemas.PrioridadeRead])
+async def listar_prioridades(db: Session = Depends(get_db)):
+    """
+    Retorna a lista de prioridades cadastradas em TBL_PRIORIDADES.
+    Usado pelo front para montar o dropdown de prioridade (Normal, Média, Alta, Crítica).
+    """
+    prioridades = db.query(models.Prioridade).order_by(models.Prioridade.id_prioridade).all()
+    return prioridades
+
 
 
 # ===================================================================
@@ -269,3 +306,47 @@ async def finalizar_solicitacao(id_solicitacao: int, db: Session = Depends(get_d
 
     return {"mensagem": "Solicitação finalizada com sucesso!", "id": solic.id_solicitacao}
 
+
+# Teste -> GET /PAGINA_SOLICITACAO_NEXUS/solicitacao/{id}
+
+@router.get(f"/{file}/solicitacao/{{id_solicitacao}}", response_model=schemas.SolicitacaoComUsuario)
+async def obter_solicitacao(id_solicitacao: int, db: Session = Depends(get_db)):
+
+    solic = (
+        db.query(models.Solicitacao, models.Usuario)
+        .join(models.Usuario,
+              models.Usuario.matricula == models.Solicitacao.matricula,
+              isouter=True)
+        .filter(models.Solicitacao.id_solicitacao == id_solicitacao)
+        .first()
+    )
+
+    if not solic:
+        raise HTTPException(404, "Solicitação não encontrada")
+
+    solic, user = solic
+
+    return schemas.SolicitacaoComUsuario(
+        id_solicitacao=solic.id_solicitacao,
+        matricula=solic.matricula,
+        id_tipo_solicitacao=solic.id_tipo_solicitacao,
+        id_status=solic.id_status,
+        data_hora_abertura=solic.data_hora_abertura,
+        data_hora_baixa=solic.data_hora_baixa,
+        prioridade_usuario=solic.prioridade_usuario,
+        prioridade_area=solic.prioridade_area,
+        id_area=solic.id_area,
+        descricao_solicitacao=solic.descricao_solicitacao,
+        acompanhamento_area_solicitante=solic.acompanhamento_area_solicitante,
+        usuario=schemas.UsuarioRead(
+            matricula=user.matricula,
+            nome=user.nome,
+        ) if user else None
+    )
+
+
+
+# Teste -> GET /PAGINA_SOLICITACAO_NEXUS/prioridades
+@router.get(f"/{file}/prioridades", response_model=List[schemas.PrioridadeRead])
+async def listar_prioridades(db: Session = Depends(get_db)):
+    return db.query(models.Prioridade).all()
