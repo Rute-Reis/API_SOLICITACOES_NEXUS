@@ -31,7 +31,9 @@ pip install -r requirements.txt
 fastapi run main.py
 
 
-Diagrama Entidade‑Relacionamento (DER) desenvolvido para modelar o fluxo de solicitações, incluindo tabelas principais, atributos, integrações e dependências.
+
+## :card_index: Diagrama Entidade‑Relacionamento (DER) desenvolvido para modelar o fluxo de solicitações, incluindo tabelas principais, atributos, integrações e dependências.
+
 
 <img width="882" height="619" alt="Captura de tela 2026-03-04 105910" src="https://github.com/user-attachments/assets/3b1a25f4-1324-4bfa-8e9f-e7bbe4c0171b" />
 
