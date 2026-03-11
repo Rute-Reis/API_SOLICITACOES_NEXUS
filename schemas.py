@@ -14,14 +14,14 @@ class UsuarioRead(BaseModel):
     class Config:
         orm_mode = True
 
-
 # ---------- ENTRADA: CRIAR SOLICITAÇÃO ----------
 class SolicitacaoCreate(BaseModel):
     matricula: str
     id_tipo_solicitacao: int
     prioridade_usuario: int
     descricao_solicitacao: str
-    area_solicitante: str  # obrigatório (vem do dropdown do front)
+    id_area: int  # obrigatório (vem do dropdown do front)
+    previsao_entrega: Optional[datetime] = None  # nova previsão de entrega (opcional)
 
 
 # ---------- SAÍDA: SOLICITAÇÃO (USADA EM /solicitacoes/criar) ----------
@@ -39,7 +39,8 @@ class SolicitacaoRead(BaseModel):
 
     id_area: int
     descricao_solicitacao: str
-    acompanhamento_area_solicitante: Optional[str] = None
+    # acompanhamento_area_solicitante: Optional[str] = None
+    previsao_entrega: Optional[datetime] = None  # nova previsão de entrega
 
     # class SolicitacaoRead(BaseModel):
     #     id_area: int
@@ -100,6 +101,12 @@ class ArquivoOut(BaseModel):
 # ---------- SAÍDA: LISTA DE ARQUIVOS POR SOLICITAÇÃO ----------
 class ArquivoList(BaseModel):
     arquivos: list[ArquivoOut]
+
+
+# ---------- ENTRADA: ATUALIZAR STATUS (USADA EM /solicitacoes/atualizar-status) ----------
+class AtualizarStatus(BaseModel):
+    novo_status: int
+
 
 
 
