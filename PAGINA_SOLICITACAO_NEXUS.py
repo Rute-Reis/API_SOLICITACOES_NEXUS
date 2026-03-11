@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 
 from fastapi import (
     APIRouter,
@@ -50,10 +50,10 @@ async def criar_solicitacao(
     db: Session = Depends(get_db),
 ):
 
-    # 1) Validar área solicitante
+    # 1) Validar área solicitante (por ID)
     area_valida = (
         db.query(models.AreaSolicitante)
-        .filter(models.AreaSolicitante.nome_area == dados.area_solicitante)
+        .filter(models.AreaSolicitante.id_area == dados.id_area)
         .first()
     )
 
@@ -86,6 +86,7 @@ async def criar_solicitacao(
         id_area=area_valida.id_area,
         data_hora_abertura=datetime.now(),
         data_hora_baixa=None,
+        previsao_entrega=dados.previsao_entrega,  # previsão de entrega da solicitação
     )
 
     db.add(nova)
@@ -155,10 +156,11 @@ async def buscar_solicitacoes(
             prioridade_area=solic.prioridade_area,
             id_area=solic.id_area,  # ← AGORA ESTÁ SENDO PREENCHIDO
             descricao_solicitacao=solic.descricao_solicitacao,
-            acompanhamento_area_solicitante=solic.acompanhamento_area_solicitante,
+            # acompanhamento_area_solicitante=solic.acompanhamento_area_solicitante,
             usuario=schemas.UsuarioRead(
                 matricula=user.matricula,
                 nome=user.nome,
+                previsao_entrega=solic.previsao_entrega,  # previsão de entrega
             )
             if user
             else None,
@@ -279,15 +281,25 @@ print(models.Arquivo.__mapper__.primary_key)
 
 
 
-# ---------- POST /PAGINA_SOLICITACAO_NEXUS/finalizar/{id_solicitacao} ----------
-@router.post(f"/{file}/finalizar/{{id_solicitacao}}")
-async def finalizar_solicitacao(id_solicitacao: int, db: Session = Depends(get_db)):
+# ---------- POST /PAGINA_SOLICITACAO_NEXUS/atualizar-status/{id_solicitacao} ----------
+@router.post(f"/{file}/atualizar-status/{{id_solicitacao}}")
+async def atualizar_status_solicitacao(
+    id_solicitacao: int,
+    payload: schemas.AtualizarStatus,
+    db: Session = Depends(get_db),
+):
     """
-    Finaliza a solicitação:
-    - Define data_hora_baixa = agora
-    - Atualiza o id_status para 'concluído' (ajuste conforme seu sistema)
+    Atualiza o ID_STATUS da solicitação e gerencia a DATA_HORA_BAIXA.
+
+    Regras:
+    - Status válidos: 0, 1, 2, 3, 4 (ver TBL_STATUS_SOLICITACAO)
+    - Se novo_status for 3 (Concluída) ou 4 (Cancelada):
+        -> preenche data_hora_baixa com datetime.now()
+    - Se novo_status for 0, 1 ou 2:
+        -> zera data_hora_baixa (None)
     """
 
+    # 1) Busca a solicitação
     solic = (
         db.query(models.Solicitacao)
         .filter(models.Solicitacao.id_solicitacao == id_solicitacao)
@@ -295,16 +307,40 @@ async def finalizar_solicitacao(id_solicitacao: int, db: Session = Depends(get_d
     )
 
     if not solic:
-        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+        raise HTTPException(
+            status_code=404,
+            detail="Solicitação não encontrada."
+        )
 
-    # Atualiza os campos de finalização
-    solic.data_hora_baixa = datetime.now()
-    solic.id_status = 3  # ajuste para o status correto da tabela
+    # 2) Valida o status (0 a 6, incluindo os novos status Em Desenvolvimento e Em Homologação )
+    status_permitidos = [0, 1, 2, 3, 4, 5, 6]  # 5 = Em Desenvolvimento, 6 = Em Homologação (novos status adicionados)
+    if payload.novo_status not in status_permitidos:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Status inválido. Valores permitidos: {status_permitidos}"
+        )
 
+    # 3) Aplica regras de data_hora_baixa
+    if payload.novo_status in (3, 4):
+        # Concluída ou Cancelada -> preenche data_hora_baixa obs: analisar o status paralisado para ver se ele também deve preencher a data_hora_baixa
+        solic.data_hora_baixa = datetime.now()
+    else:
+        # Aberta / Em análise / Em Desenvolvimento -> limpa data_hora_baixa
+        solic.data_hora_baixa = None
+
+    # 4) Atualiza o ID_STATUS
+    solic.id_status = payload.novo_status
+
+    # 5) Salva no banco
     db.commit()
     db.refresh(solic)
 
-    return {"mensagem": "Solicitação finalizada com sucesso!", "id": solic.id_solicitacao}
+    return {
+        "mensagem": "Status atualizado com sucesso!",
+        "id_solicitacao": solic.id_solicitacao,
+        "novo_status": solic.id_status,
+        "data_hora_baixa": solic.data_hora_baixa,
+    }
 
 
 # Teste -> GET /PAGINA_SOLICITACAO_NEXUS/solicitacao/{id}
@@ -337,10 +373,11 @@ async def obter_solicitacao(id_solicitacao: int, db: Session = Depends(get_db)):
         prioridade_area=solic.prioridade_area,
         id_area=solic.id_area,
         descricao_solicitacao=solic.descricao_solicitacao,
-        acompanhamento_area_solicitante=solic.acompanhamento_area_solicitante,
+        # acompanhamento_area_solicitante=solic.acompanhamento_area_solicitante,
         usuario=schemas.UsuarioRead(
             matricula=user.matricula,
             nome=user.nome,
+            previsao_entrega=solic.previsao_entrega,  # previsão de entrega
         ) if user else None
     )
 
@@ -350,3 +387,75 @@ async def obter_solicitacao(id_solicitacao: int, db: Session = Depends(get_db)):
 @router.get(f"/{file}/prioridades", response_model=List[schemas.PrioridadeRead])
 async def listar_prioridades(db: Session = Depends(get_db)):
     return db.query(models.Prioridade).all()
+
+
+
+# ---------- GET /PAGINA_SOLICITACAO_NEXUS/solicitacoes ----------
+@router.get(
+    f"/{file}/solicitacoes",
+    response_model=List[schemas.SolicitacaoComUsuario],
+)
+async def listar_todas_as_solicitacoes(
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db),
+):
+    """
+    Lista solicitações com JOIN em usuário, com paginação simples.
+
+    - page: página atual (inicia em 1)
+    - page_size: quantidade de registros por página (padrão 50)
+    """
+
+    if page < 1:
+        raise HTTPException(status_code=400, detail="page deve ser >= 1")
+    if page_size < 1 or page_size > 200:
+        raise HTTPException(status_code=400, detail="page_size deve estar entre 1 e 200")
+
+    offset = (page - 1) * page_size
+
+    rows = (
+        db.query(models.Solicitacao, models.Usuario)
+        .join(
+            models.Usuario,
+            models.Usuario.matricula == models.Solicitacao.matricula,
+            isouter=True,
+        )
+        .order_by(models.Solicitacao.data_hora_abertura.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+
+    resultado: List[schemas.SolicitacaoComUsuario] = []
+
+    for solic, user in rows:
+        if solic.id_area is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Registro ID_SOLICITACAO={solic.id_solicitacao} está sem ID_AREA definido no banco."
+            )
+
+        resultado.append(
+            schemas.SolicitacaoComUsuario(
+                id_solicitacao=solic.id_solicitacao,
+                matricula=solic.matricula,
+                id_tipo_solicitacao=solic.id_tipo_solicitacao,
+                id_status=solic.id_status,
+                data_hora_abertura=solic.data_hora_abertura,
+                data_hora_baixa=solic.data_hora_baixa,
+                prioridade_usuario=solic.prioridade_usuario,
+                prioridade_area=solic.prioridade_area,
+                id_area=solic.id_area,
+                descricao_solicitacao=solic.descricao_solicitacao,
+                # acompanhamento_area_solicitante=solic.acompanhamento_area_solicitante,
+                usuario=schemas.UsuarioRead(
+                    matricula=user.matricula,
+                    nome=user.nome,
+                    previsao_entrega=solic.previsao_entrega,  # previsão de entrega
+                ) if user else None,
+            )
+        )
+
+    return resultado
+
