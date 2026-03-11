@@ -81,6 +81,9 @@ class Solicitacao(Base):
     data_hora_abertura = Column("DATA_HORA_ABERTURA", DateTime, nullable=False)
     data_hora_baixa = Column("DATA_HORA_BAIXA", DateTime)
 
+    # nova coluna para previsão de entrega
+    previsao_entrega = Column("PREVISAO_ENTREGA", DateTime, nullable=True)
+
     # Prioridades
     prioridade_usuario = Column("PRIORIDADE_USUARIO", TINYINT, default=0)
     prioridade_area = Column("PRIORIDADE_AREA", TINYINT, default=0)
