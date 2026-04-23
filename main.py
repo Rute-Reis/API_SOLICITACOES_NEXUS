@@ -4,6 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import ssl
 
+from fastapi.responses import JSONResponse
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+import traceback
+
+
 #from .backlogRansharing import backlogRansharing
 #from .tabelaAutomacao import tabelaAutomacao
 #from .Science import Science
@@ -18,6 +23,42 @@ app = FastAPI()
 import os
 
 app = FastAPI()
+
+
+# # Configurações de segurança - Trusted Host Middleware
+# app.add_middleware(
+#     TrustedHostMiddleware,
+#     allowed_hosts=["*"]  # pode restringir depois
+# )
+
+# # Tratamento global de erros
+# @app.middleware("http")
+# async def catch_exceptions_middleware(request, call_next):
+#     try:
+#         return await call_next(request)
+#     except Exception as e:
+#         # Log interno
+#         print("🔥 ERRO INTERNO NA API:")
+#         traceback.print_exc()
+
+#         # Resposta amigável para o front
+#         return JSONResponse(
+#             status_code=500,
+#             content={
+#                 "sucesso": False,
+#                 "mensagem": "O sistema está temporariamente indisponível. Tente novamente em instantes."
+#             },
+#         )
+
+
+
+# Monta a rota para servir arquivos estáticos da pasta de uploads
+# MONTA A PASTA DE UPLOADS COMO ENDPOINT /file
+app.mount(
+    "/files",
+    StaticFiles(directory="/home/vrodrigues/Desktop/RUTE_REIS/PAGINA_SOLICITACAO_NEXUS/uploads_solicitacao_Nexus"),
+    name="files",
+)
 
 # === Pasta de uploads_solicitacao_Nexus, compartilhada com PAGINA_SOLICITACAO_NEXUS ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))      # diretório onde está o main.py
