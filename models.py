@@ -44,6 +44,9 @@ class AreaSolicitante(Base):
     id_area = Column("ID_AREA", Integer, primary_key=True, index=True)
     nome_area = Column("NOME_AREA", String(100), unique=True, nullable=False)
 
+    # titulo_solicitacao = Column("TITULO_SOLICITACAO", String(255), nullable=False)
+    # comentario_admin = Column("COMENTARIO_ADMIN", Text, nullable=True)
+
 
 
 # ===============================================================
@@ -91,9 +94,21 @@ class Solicitacao(Base):
     # Área do solicitante (domínio)
     id_area = Column("ID_AREA", Integer, nullable=False)
 
+    # # Relacionamento lógico com a tabela de arquivos
+    # id_arquivo = Column("ID_ARQUIVO", Integer)
+    # nome_arquivo = Column("NOME_ARQUIVO", String(255))
+    # nome_original = Column("NOME_ORIGINAL", String(255))
+
     # Descrições da solicitação
     descricao_solicitacao = Column("DESCRICAO_SOLICITACAO", Text, nullable=False)
     acompanhamento_area_solicitante = Column("ACOMPANHAMENTO_AREA_SOLICITANTE", Text)
+
+    # campo para título da solicitação (nova adição) e comentário do admin (nova adição)
+    titulo_solicitacao = Column("TITULO_SOLICITACAO", String(255), nullable=False)
+    comentario_admin = Column("COMENTARIO_ADMIN", Text, nullable=True)
+
+    # campo para responsável pela solicitação (nova adição)
+    responsavel_solicitacao = Column("RESPONSAVEL_SOLICITACAO", String(255), nullable=True)
 
 
 
@@ -145,3 +160,22 @@ class Prioridade(Base):
 
     id_prioridade = Column("ID_PRIORIDADE", Integer, primary_key=True)
     descricao = Column("DESCRICAO", String(50), nullable=False)
+
+
+# ===============================================================
+#  TABELA: Notificações (NEXUS.TBL_NOTIFICACOES_NEXUS)
+#  ---------------------------------------------------------------
+#  Finalidade:
+#    - Registra eventos relevantes para os usuários (ex: mudança de status).
+class Notificacao(Base):
+    __tablename__ = "TBL_NOTIFICACOES_NEXUS"
+    __table_args__ = {"schema": "NEXUS"}
+
+    id_notificacao = Column("ID_NOTIFICACAO", Integer, primary_key=True, autoincrement=True)
+    id_solicitacao = Column("ID_SOLICITACAO", Integer, nullable=False)
+    tipo_evento = Column("TIPO_EVENTO", String(50), nullable=False)
+    matricula_destino = Column("MATRICULA_DESTINO", String(50), nullable=False)
+    descricao_evento = Column("DESCRICAO_EVENTO", Text)
+    data_evento = Column("DATA_EVENTO", DateTime)
+    enviado = Column("ENVIADO", TINYINT, default=0)
+
