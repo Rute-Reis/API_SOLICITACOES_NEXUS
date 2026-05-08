@@ -7,8 +7,7 @@ from email.message import EmailMessage
 import pandas as pd
 from sqlalchemy import create_engine
 
-from dispatcher_notificacoes import enviar_teams_power_automate
-
+from dispatcher_notificacoes_email import enviar_teams_power_automate
 
 # --------------------------------------------------
 # CONFIGURAÇÕES DE BANCO (NEXUS)
