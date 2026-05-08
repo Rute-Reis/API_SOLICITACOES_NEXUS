@@ -64,9 +64,16 @@ class SolicitacaoRead(BaseModel):
 # ---------- SAÍDA: SOLICITAÇÃO + USUÁRIO + ARQUIVO(S) ----------
 class SolicitacaoComUsuario(SolicitacaoRead):
     usuario: Optional[UsuarioRead] = None
-    # lista de arquivos, mas nome no singular (arquivo)
     arquivo: Optional[List[ArquivoOut]] = None
-    responsavel_solicitacao: Optional[str] = None
+
+
+# --------- SAÍDA: PAGINAÇÃO DE SOLICITAÇÕES ----------
+class PaginacaoSolicitacao(BaseModel):
+    data: List[SolicitacaoComUsuario]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
 
 
 # ---------- ENTRADA: BUSCA POR PERÍODO ----------
@@ -95,25 +102,23 @@ class PrioridadeRead(BaseModel):
         from_attributes = True
 
 
-# ---------- SAÍDA: LISTA DE ARQUIVOS (se você usar em algum lugar específico) ----------
+# ---------- SAÍDA: LISTA DE ARQUIVOS ----------
 class ArquivoList(BaseModel):
-    arquivo: List[ArquivoOut]   # também em singular
+    arquivo: List[ArquivoOut]
 
     class Config:
         from_attributes = True
 
 
-# ---------- ENTRADA: ATUALIZAR STATUS ----------
+# ---------- ENTRADAS DE UPDATE ----------
 class AtualizarStatus(BaseModel):
     novo_status: int
 
 
-# ---------- ENTRADA: ATUALIZAR PREVISÃO DE ENTREGA ----------
 class AtualizarPrevisaoEntrega(BaseModel):
     nova_previsao: datetime
 
 
-# ---------- ENTRADA: ATUALIZAR PRIORIDADE (ÁREA) ----------
 class AtualizarPrioridadeArea(BaseModel):
     prioridade_area: int
 
@@ -121,17 +126,15 @@ class AtualizarPrioridadeArea(BaseModel):
         from_attributes = True
 
 
-# --------- ENTRADA: ATUALIZAR COMENTÁRIO (ADMIN) ----------
 class AtualizarComentarioAdmin(BaseModel):
     comentario_admin: str
 
-    class config:
+    class Config:
         from_attributes = True
 
 
-# ---------- ENTRADA: ATUALIZAR DESCRIÇÃO SOLICITAÇÃO ----------
 class AtualizarDescricaoSolicitacao(BaseModel):
     descricao_solicitacao: str
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
