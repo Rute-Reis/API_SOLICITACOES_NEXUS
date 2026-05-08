@@ -18,7 +18,10 @@ from .app.database import get_db
 from .app import models, schemas
 from .notificacoes import registrar_evento
 
-from .dispatcher_notificacoes import enviar_notificacao_por_id
+from math import ceil
+from fastapi import HTTPException, Query
+
+from .dispatcher_notificacoes_email import enviar_notificacao_por_id
 
 # prints para debug das tabelas
 print(models.Usuario.__table__)
@@ -183,25 +186,41 @@ async def buscar_solicitacoes(
 
 
 
-
-# ---------- GET /PAGINA_SOLICITACAO_NEXUS/solicitacoes ----------
+# ---------- GET /PAGINA_SOLICITACAO_NEXUS/solicitacoes ---atualizado para páginas----------
 @router.get(
     f"/{file}/solicitacoes",
-    response_model=List[schemas.SolicitacaoComUsuario],
+    response_model=schemas.PaginacaoSolicitacao,
 )
 async def listar_todas_as_solicitacoes(
-    page: int = 1,
-    page_size: int = 50,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
 
-    if page < 1:
-        raise HTTPException(status_code=400, detail="page deve ser >= 1")
-    if page_size < 1 or page_size > 200:
-        raise HTTPException(status_code=400, detail="page_size deve estar entre 1 e 200")
+    # 1️ Total real de registros no banco
+    total = db.query(models.Solicitacao).count()
+
+    if total == 0:
+        return {
+            "data": [],
+            "page": page,
+            "page_size": page_size,
+            "total": 0,
+            "total_pages": 0,
+        }
+
+    # 2️ Cálculo de paginação
+    total_pages = ceil(total / page_size)
+
+    if page > total_pages:
+        raise HTTPException(
+            status_code=400,
+            detail=f"page inválida. Última página disponível: {total_pages}"
+        )
 
     offset = (page - 1) * page_size
 
+    # 3️ Query paginada
     rows = (
         db.query(models.Solicitacao, models.Usuario)
         .join(
@@ -215,13 +234,13 @@ async def listar_todas_as_solicitacoes(
         .all()
     )
 
-    resultado: List[schemas.SolicitacaoComUsuario] = []
+    resultado: list[schemas.SolicitacaoComUsuario] = []
 
     for solic, user in rows:
         if solic.id_area is None:
             raise HTTPException(
                 status_code=500,
-                detail=f"Registro ID_SOLICITACAO={solic.id_solicitacao} está sem ID_AREA definido no banco."
+                detail=f"Registro ID_SOLICITACAO={solic.id_solicitacao} está sem ID_AREA definido."
             )
 
         arquivos_db = (
@@ -229,6 +248,7 @@ async def listar_todas_as_solicitacoes(
             .filter(models.Arquivo.ID_SOLICITACAO == solic.id_solicitacao)
             .all()
         )
+
         arquivos_out = [schemas.ArquivoOut.from_orm(a) for a in arquivos_db]
 
         resultado.append(
@@ -256,7 +276,89 @@ async def listar_todas_as_solicitacoes(
             )
         )
 
-    return resultado
+    # 4️ Retorno paginado
+    return {
+        "data": resultado,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    }
+
+
+# #---------- GET /PAGINA_SOLICITACAO_NEXUS/solicitacoes ----------
+# @router.get(
+#     f"/{file}/solicitacoes",
+#     response_model=List[schemas.SolicitacaoComUsuario],
+# )
+# async def listar_todas_as_solicitacoes(
+#     page: int = 1,
+#     page_size: int = 50,
+#     db: Session = Depends(get_db),
+# ):
+
+#     if page < 1:
+#         raise HTTPException(status_code=400, detail="page deve ser >= 1")
+#     if page_size < 1 or page_size > 200:
+#         raise HTTPException(status_code=400, detail="page_size deve estar entre 1 e 200")
+
+#     offset = (page - 1) * page_size
+
+#     rows = (
+#         db.query(models.Solicitacao, models.Usuario)
+#         .join(
+#             models.Usuario,
+#             models.Usuario.matricula == models.Solicitacao.matricula,
+#             isouter=True,
+#         )
+#         .order_by(models.Solicitacao.data_hora_abertura.desc())
+#         .offset(offset)
+#         .limit(page_size)
+#         .all()
+#     )
+
+#     resultado: List[schemas.SolicitacaoComUsuario] = []
+
+#     for solic, user in rows:
+#         if solic.id_area is None:
+#             raise HTTPException(
+#                 status_code=500,
+#                 detail=f"Registro ID_SOLICITACAO={solic.id_solicitacao} está sem ID_AREA definido no banco."
+#             )
+
+#         arquivos_db = (
+#             db.query(models.Arquivo)
+#             .filter(models.Arquivo.ID_SOLICITACAO == solic.id_solicitacao)
+#             .all()
+#         )
+#         arquivos_out = [schemas.ArquivoOut.from_orm(a) for a in arquivos_db]
+
+#         resultado.append(
+#             schemas.SolicitacaoComUsuario(
+#                 id_solicitacao=solic.id_solicitacao,
+#                 matricula=solic.matricula,
+#                 id_tipo_solicitacao=solic.id_tipo_solicitacao,
+#                 id_status=solic.id_status,
+#                 data_hora_abertura=solic.data_hora_abertura,
+#                 data_hora_baixa=solic.data_hora_baixa,
+#                 prioridade_usuario=solic.prioridade_usuario,
+#                 prioridade_area=solic.prioridade_area,
+#                 id_area=solic.id_area,
+#                 descricao_solicitacao=solic.descricao_solicitacao,
+#                 titulo_solicitacao=solic.titulo_solicitacao,
+#                 previsao_entrega=solic.previsao_entrega,
+#                 comentario_admin=solic.comentario_admin,
+#                 responsavel_solicitacao=solic.responsavel_solicitacao,
+#                 usuario=schemas.UsuarioRead(
+#                     matricula=user.matricula,
+#                     nome=user.nome,
+#                     previsao_entrega=solic.previsao_entrega,
+#                 ) if user else None,
+#                 arquivo=arquivos_out,
+#             )
+#         )
+
+#     return resultado
 
 
 # ---------- GET /PAGINA_SOLICITACAO_NEXUS/solicitacao/{id_solicitacao} ----------
